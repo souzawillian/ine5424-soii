@@ -61,6 +61,13 @@ Thread::~Thread()
     _ready.remove(this);
     _suspended.remove(this);
 
+    /**
+     * Remove this thread from waiting queue
+     * when it was destructed.
+     */
+    if (_waiting)
+        _waiting->remove(this);
+
     unlock();
 
     kfree(_stack);
@@ -101,6 +108,62 @@ void Thread::pass()
     unlock();
 }
 
+void Thread::sleep(Queue * sleeping)
+{
+    lock();
+
+    Thread* thread = running();
+    thread->_state = WAITING; // update state of current thread to waiting
+    thread->_waiting = sleeping; // get a copy from pointer to thread sleeping queue 
+    sleeping->insert(&thread->_link); // insert running thread, that going to sleep
+
+    if(!_ready.empty()) {
+        /**
+         * If has not thread in ready queue, make one to running
+         * updating its state and changing context
+         */
+        _running = _ready.remove()->object();
+        _running->_state = RUNNING;
+
+        dispatch(thread, _running);
+    } else
+        idle(); // implicit unlock()
+
+    unlock();
+}
+
+void Thread::wakeup(Queue * sleeping)
+{
+    lock();
+    if(!sleeping->empty()) {
+        /**
+         * If has sleep queue is non empty, wake up it
+         * changing state to READY and adding to _ready queue
+         * being able of be scheduled
+         *
+         * Restart waiting queue from this thread, changing to null (0)
+         */
+        Thread * t = sleeping->remove()->object();
+        t->_state = READY;
+        t->_waiting = 0;
+        _ready.insert(&t->_link);
+    }
+    unlock();
+};
+
+void Thread::wakeup_all(Queue * sleeping) {
+    lock();
+    while(!sleeping->empty()) {
+        /**
+         * Wakeup each thread at sleeping queue
+         */
+        Thread * t = sleeping->remove()->object();
+        t->_state = READY;
+        t->_waiting = 0;
+        _ready.insert(&t->_link);
+    }
+    unlock();
+};
 
 void Thread::suspend()
 {

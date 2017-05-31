@@ -78,6 +78,23 @@ public:
     void suspend();
     void resume();
 
+    /**
+     * sleep function passing queue pointer to add this thread
+     */
+    static void sleep(Queue * sleeping);
+
+    /**
+     * wakeup remove one thread from sleeping queue
+     * changing its state to READY and insert to ready queue
+     */
+    static void wakeup(Queue * sleeping);
+
+
+    /**
+     * wakeup_all runs wakeup for all threads in sleeping queue
+     */
+    static void wakeup_all(Queue * sleeping);
+
     static Thread * volatile self() { return running(); }
     static void yield();
     static void exit(int status = 0);
@@ -107,6 +124,13 @@ protected:
     Context * volatile _context;
     volatile State _state;
     Queue::Element _link;
+
+    /**
+     * Pointer to thread queue running at synchronizer
+     * is used to remove thread from queue if it is in the queue,
+     * when this thread will destructed
+     */
+    Queue * _waiting;
 
     static Scheduler_Timer * _timer;
 
