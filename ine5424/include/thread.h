@@ -136,6 +136,7 @@ protected:
 
 private:
     static Thread * volatile _running;
+    Thread * volatile _join_wait;
     static Queue _ready;
     static Queue _suspended;
 };

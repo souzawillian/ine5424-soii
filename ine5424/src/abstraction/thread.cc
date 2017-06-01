@@ -61,6 +61,20 @@ Thread::~Thread()
     _ready.remove(this);
     _suspended.remove(this);
 
+    //joined
+    if(_running == this && this->_join_wait) {
+        Thread * t = this->_join_wait;
+        _suspended.remove(&t->_link);
+        t->_state = READY;
+        _ready.insert(&t->_link);
+        this->_join_wait = 0;
+    }
+
+    //joiner
+    if(_running->_join_wait == this){
+        _running->_join_wait  = 0;
+    }
+
     /**
      * Remove this thread from waiting queue
      * when it was destructed.
@@ -80,8 +94,14 @@ int Thread::join()
 
     db<Thread>(TRC) << "Thread::join(this=" << this << ",state=" << _state << ")" << endl;
 
-    while(_state != FINISHING)
-        yield(); // implicit unlock()
+    assert(_running != this);
+    assert(!_join_wait);
+
+    if(_state != FINISHING) {
+        //yield(); // implicit unlock() Old code
+        _join_wait = this;
+        _join_wait->suspend();
+    }
 
     unlock();
 
@@ -236,6 +256,14 @@ void Thread::exit(int status)
         idle(); // implicit unlock();
 
     lock();
+
+    if(_running->_join_wait) {
+        Thread * t = _running->_join_wait;
+        _suspended.remove(&t->_link);
+        t->_state = READY;
+        _ready.insert(&t->_link);
+        _running->_join_wait = 0;
+    }
 
     if(!_ready.empty()) {
         Thread * prev = _running;
